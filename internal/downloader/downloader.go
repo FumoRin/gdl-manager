@@ -5,11 +5,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
+	"sync"
 	"time"
 )
 
-func Download(url string, opts DownloadOptions) (err error) {
+func Download(url string, opts DownloadOptions, wg *sync.WaitGroup) (err error) {
+	defer wg.Done()
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -29,10 +30,7 @@ func Download(url string, opts DownloadOptions) (err error) {
 		)
 	}
 
-	filename := opts.Filename
-	if filename == "" {
-		filename = path.Base(url)
-	}
+	filename := resolveFilename(url, opts, resp)
 
 	file, err := os.Create(filename)
 	if err != nil {
@@ -46,52 +44,18 @@ func Download(url string, opts DownloadOptions) (err error) {
 		}
 	}()
 
-	size := formatBytes(resp.ContentLength)
-
-	fmt.Printf("Downloading %s\n", filename)
-	fmt.Printf("Size: %s bytes\n", size)
-
 	pw := &ProgressWriter{
-		Total:       resp.ContentLength,
-		Destination: file,
-		StartTime: time.Now(),
+		Filename:     filename,
+		Total:        resp.ContentLength,
+		Destination:  file,
+		StartTime:    time.Now(),
+		ProgressChan: opts.Progress,
 	}
-
-	done := make(chan struct{})
-
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-				case <-ticker.C:
-					percentage :=
-						(float64(pw.Current)/float64(pw.Total)) * 100
-
-					fmt.Printf(
-						"\r\033[K%.2f%% | %s/%s | %s/s | ETA %s",
-						percentage,
-						formatBytes(pw.Current),
-						formatBytes(pw.Total),
-						formatBytes(int64(pw.Speed())),
-						pw.FormatTime(pw.Eta()),
-					)
-				case <-done:
-					return
-			}
-		}
-	}()
 
 	_, err = io.Copy(pw, resp.Body)
 	if err != nil {
 		return err
 	}
-
-	close(done)
-
-	fmt.Println()
-	fmt.Println("Download Complete")
 
 	return nil
 }

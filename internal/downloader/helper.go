@@ -2,11 +2,14 @@ package downloader
 
 import (
 	"fmt"
+	"mime"
+	"net/http"
+	"path"
 	"strings"
 	"time"
 )
 
-func formatBytes(b int64) string {
+func FormatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
@@ -20,7 +23,7 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTP"[exp])
 }
 
-func (pw *ProgressWriter) FormatTime(d time.Duration) string {
+func FormatTime(d time.Duration) string {
 	totaltime := int64(d.Seconds())
 	hour := totaltime / 3600
 	remain := totaltime % 3600
@@ -45,4 +48,26 @@ func (pw *ProgressWriter) FormatTime(d time.Duration) string {
 	result := strings.Join(parts, " ")
 
 	return result
+}
+
+func Truncate(s string, max int) string {
+    if len(s) > max {
+        return s[:max-3] + "..."
+    }
+    return s
+}
+
+func resolveFilename(url string, opts DownloadOptions, resp *http.Response) string {
+	if opts.Filename != "" {
+		return opts.Filename
+	}
+
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		_, params, err := mime.ParseMediaType(cd)
+		if err == nil && params["filename"] != "" {
+			return params["filename"]
+		}
+	}
+
+	return path.Base(url)
 }
