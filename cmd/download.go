@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 
@@ -15,12 +16,9 @@ var downloadCmd = &cobra.Command{
 	Short: "Download a file from the given url",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m := &downloader.DownloadManager{
-			Job:      make(chan downloader.DownloadJob),
-			Progress: make(chan downloader.Progress),
-		}
-		done := make(chan bool)
+		m := downloader.NewDownloadManager()
 		totalWorkers := 3
+
 		if filename != "" && len(args) > 1 {
 			log.Fatal("Error: Flag output is only available for single download")
 		}
@@ -28,45 +26,13 @@ var downloadCmd = &cobra.Command{
 		m.StartWorker(totalWorkers)
 
 		for _, url := range args {
-			m.StartDownload(url, filename)
+			hash := sha256.Sum256([]byte(url))
+			ID := fmt.Sprintf("%x", hash)
+			m.StartDownload(ID, url, filename)
 		}
 		close(m.Job)
 
-		go func() {
-			nextIndex := 0
-			lineMap := make(map[string]int)
-			for p := range m.Progress {
-				if _, ok := lineMap[p.Filename]; !ok {
-					lineMap[p.Filename] = nextIndex
-					nextIndex++
-					fmt.Println()
-				}
-
-				dist := nextIndex - lineMap[p.Filename]
-				fmt.Printf("\033[%dA", dist)
-				fmt.Print("\r")
-				fmt.Printf(
-					"\033[K%-30s | %.2f%% | %-7s/%-7s |  %s/s | ETA %s",
-					downloader.Truncate(p.Filename, 30),
-					p.Percentage,
-					downloader.FormatBytes(p.CurrentSize),
-					downloader.FormatBytes(p.TotalSize),
-					downloader.FormatBytes(int64(p.Speed)),
-					downloader.FormatTime(p.ETA),
-				)
-				fmt.Printf("\033[%dB", dist)
-			}
-
-			fmt.Println()
-			done <- true
-		}()
-
-		m.Wg.Wait()
-
-		close(m.Progress)
-		<-done
-
-		return nil
+		return RunDownloadSession(m)
 	},
 }
 
