@@ -19,7 +19,7 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 	var errFile error
 
 	client := &http.Client{}
-	headReq, err := http.NewRequest("HEAD", url, nil)
+	headReq, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return err
 	}
@@ -34,13 +34,7 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 		return closeErr
 	}
 
-	if info, err := os.Stat(filename); err == nil {
-		currentSize = info.Size()
-		fcurrentSize := FormatBytes(currentSize)
-		fmt.Printf("Found partial file, continuing at %s...", fcurrentSize)
-	}
-
-	bodyGet, err := http.NewRequest("GET", url, nil)
+	bodyGet, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
@@ -63,14 +57,12 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 
 	switch bodyResp.StatusCode {
 	case http.StatusPartialContent:
-		fmt.Println("Server supports resuming. Continuing ...")
 		file, errFile = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		if errFile != nil {
 			return errFile
 		}
 
 	case http.StatusOK:
-		fmt.Println("Server doesn't support resuming. Resetting from the start ...")
 		file, errFile = os.Create(filename)
 		if errFile != nil {
 			return errFile
@@ -104,7 +96,6 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 			n, err := bodyResp.Body.Read(buf)
 
 			if err == io.EOF {
-				
 				return nil
 			} else if err != nil {
 				return err

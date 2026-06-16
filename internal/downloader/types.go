@@ -11,7 +11,7 @@ type DownloadStatus int
 
 const (
 	StateQueue DownloadStatus = iota
-	StateDownloading 
+	StateDownloading
 	StatePaused
 	StateCompleted
 	StateError
@@ -37,6 +37,8 @@ type DownloadManager struct {
 	State         map[string]*DownloadState
 	Mu            sync.Mutex
 	Cancellations map[string]context.CancelFunc
+	Ctx           context.Context
+	Cancel        context.CancelFunc
 }
 
 type DownloadState struct {
@@ -68,5 +70,5 @@ type Progress struct {
 }
 
 func (s DownloadStatus) String() string {
-	return  [...]string{"Queued","Downloading", "Paused", "Completed", "Error"}[s]
+	return [...]string{"Queued", "Downloading", "Paused", "Completed", "Error"}[s]
 }

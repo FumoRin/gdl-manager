@@ -11,7 +11,8 @@ import (
 )
 
 func RunDownloadSession(m *downloader.DownloadManager) error {
-	done := make(chan bool)
+	progressDone := make(chan struct{})
+	stopAutosave := make(chan struct{})
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -42,29 +43,31 @@ func RunDownloadSession(m *downloader.DownloadManager) error {
 		}
 
 		fmt.Println()
-		done <- true
+		close(progressDone)
 	}()
 
 	go func() {
 		sig := <-sigChan
-		fmt.Printf("\nReceived signal %v. Shutting down gracefully...", sig)
+		fmt.Printf("\nReceived signal %v. Shutting down gracefully...\n", sig)
+		m.Cancel()
 		m.Mu.Lock()
 		for id, cancel := range m.Cancellations {
-			fmt.Printf("Cancelling download %s ...", id)
+			fmt.Printf("Cancelling download %s ...\n", id)
 			cancel()
 		}
 		m.Mu.Unlock()
 	}()
-	
+
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if saveErr := m.SaveState("download.json"); saveErr != nil {
 					return
 				}
-			case <-done:
+			case <-stopAutosave:
 				return
 			}
 		}
@@ -72,6 +75,12 @@ func RunDownloadSession(m *downloader.DownloadManager) error {
 
 	m.Wg.Wait()
 	close(m.Progress)
-	<-done
+	<-progressDone
+	close(stopAutosave)
+
+	if saveErr := m.SaveState("download.json"); saveErr != nil {
+		return saveErr
+	}
+
 	return nil
 }

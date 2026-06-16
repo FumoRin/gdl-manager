@@ -22,16 +22,20 @@ var downloadCmd = &cobra.Command{
 		if filename != "" && len(args) > 1 {
 			log.Fatal("Error: Flag output is only available for single download")
 		}
+		
+		m.Wg.Add(len(args))
 
 		m.StartWorker(totalWorkers)
 
-		for _, url := range args {
-			hash := sha256.Sum256([]byte(url))
-			ID := fmt.Sprintf("%x", hash)
-			m.StartDownload(ID, url, filename)
-		}
-		close(m.Job)
-
+		go func ()  {
+			for _, url := range args {
+				hash := sha256.Sum256([]byte(url))
+				ID := fmt.Sprintf("%x", hash)
+				m.StartDownload(ID, url, filename)
+			}
+			close(m.Job)	
+		}()
+		
 		return RunDownloadSession(m)
 	},
 }
