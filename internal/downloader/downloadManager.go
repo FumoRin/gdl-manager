@@ -19,7 +19,7 @@ func (m *DownloadManager) StartWorker(count int) {
 				case job, ok := <-m.Job:
 					if !ok {
 						return
-					} 
+					}
 
 					if m.Ctx.Err() != nil {
 						m.Mu.Lock()
@@ -41,28 +41,34 @@ func (m *DownloadManager) StartWorker(count int) {
 						Progress: m.Progress,
 					}
 
-					err := Download(job.URL, opts, &m.Wg, ctx)
+					totalSize, filename, err := Download(job.URL, opts, &m.Wg, ctx)
+
+					m.Mu.Lock()
+
+					if filename != "" {
+						m.State[job.ID].Filename = filename
+					}
+
+					if totalSize > 0 {
+						m.State[job.ID].TotalSize = totalSize
+					}
+
 					if err == nil {
-						m.Mu.Lock()
 						m.State[job.ID].Status = StateCompleted
-						m.Mu.Unlock()
 					} else if errors.Is(err, context.Canceled) {
-						m.Mu.Lock()
 						m.State[job.ID].Status = StatePaused
-						m.Mu.Unlock()
 					} else {
-						m.Mu.Lock()
 						m.State[job.ID].Status = StateError
-						m.Mu.Unlock()
 
 						fmt.Printf("Download Failed for %s: %v\n", job.URL, err)
 					}
 
-					m.Mu.Lock()
+
 					delete(m.Cancellations, job.ID)
 					m.Mu.Unlock()
+
 					cancel()
-					
+
 				}
 			}
 		}()

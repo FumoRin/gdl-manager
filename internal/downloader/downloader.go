@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.Context) (err error) {
+func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.Context) (totalSize int64, filename string, err error) {
 	defer wg.Done()
 
 	var currentSize int64
@@ -21,22 +21,23 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 	client := &http.Client{}
 	headReq, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
-		return err
+		return 
 	}
 
 	headResp, err := client.Do(headReq)
 	if err != nil {
-		return err
+		return
 	}
-	filename := resolveFilename(url, opts, headResp)
+	filename = resolveFilename(url, opts, headResp)
 	closeErr := headResp.Body.Close()
 	if closeErr != nil {
-		return closeErr
+		err = closeErr
+		return 
 	}
 
 	bodyGet, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return err
+		return 
 	}
 
 	if currentSize > 0 {
@@ -45,8 +46,10 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 
 	bodyResp, err := client.Do(bodyGet)
 	if err != nil {
-		return err
+		return 
 	}
+
+	totalSize = bodyResp.ContentLength
 
 	defer func() {
 		closeErr := bodyResp.Body.Close()
@@ -59,18 +62,21 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 	case http.StatusPartialContent:
 		file, errFile = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		if errFile != nil {
-			return errFile
+			err = errFile
+			return 
 		}
 
 	case http.StatusOK:
 		file, errFile = os.Create(filename)
 		if errFile != nil {
-			return errFile
+			err = errFile
+			return 
 		}
 
 	default:
 		log.Fatalf("Unexpected status code: %d\n", bodyResp.StatusCode)
 	}
+
 
 	defer func() {
 		closeErr := file.Close()
@@ -82,7 +88,7 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 	buf := make([]byte, 32*1024)
 	pw := &ProgressWriter{
 		Filename:     filename,
-		Total:        bodyResp.ContentLength,
+		Total:        totalSize,
 		Destination:  file,
 		StartTime:    time.Now(),
 		ProgressChan: opts.Progress,
@@ -91,19 +97,22 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			err = ctx.Err()
+			return 
 		default:
-			n, err := bodyResp.Body.Read(buf)
+			n, writeErr := bodyResp.Body.Read(buf)
 
-			if err == io.EOF {
-				return nil
-			} else if err != nil {
-				return err
+			if writeErr == io.EOF {
+				return 
+			} else if writeErr != nil {
+				err = writeErr
+				return 
 			}
 
 			_, dataErr := pw.Write(buf[:n])
 			if dataErr != nil {
-				return dataErr
+				err = dataErr
+				return 
 			}
 		}
 	}
