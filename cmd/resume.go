@@ -31,21 +31,28 @@ var resumeCmd = &cobra.Command{
 
 			if state.Status != downloader.StateCompleted {
 				fmt.Printf("Resuming specific download: %s\n", state.Filename)
+				m.Wg.Add(1)
 				m.StartDownload(targetID, state.URL, state.Filename)
 			} else {
 				fmt.Printf("Download %s is already completed", state.Filename)
 			}
 		} else {
 			// If no Args provided
+			var toResume []string
 			for id, state := range m.State {
-				if state.Status == downloader.StateCompleted {
-					continue
+				if state.Status != downloader.StateCompleted {
+					toResume = append(toResume, id)
 				}
-				fmt.Printf("Resuming download: %s\n", state.Filename)
-				m.StartDownload(id, state.URL, state.Filename)
+
+				m.Wg.Add(len(toResume))
+
+				for _, id := range toResume {
+					state := m.State[id]
+					m.StartDownload(id, state.URL, state.Filename)
+				}
 			}
 		}
-		
+
 		close(m.Job)
 		return RunDownloadSession(m)
 	},
