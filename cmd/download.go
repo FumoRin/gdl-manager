@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/fumorin/gdl-manager/internal/downloader"
 	"github.com/spf13/cobra"
 )
 
@@ -16,16 +15,13 @@ var downloadCmd = &cobra.Command{
 	Short: "Download a file from the given url",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m := downloader.NewDownloadManager()
-		totalWorkers := 3
+		m := app.Manager
 
 		if filename != "" && len(args) > 1 {
 			log.Fatal("Error: Flag output is only available for single download")
 		}
 		
 		m.Wg.Add(len(args))
-
-		m.StartWorker(totalWorkers)
 
 		go func ()  {
 			for _, url := range args {

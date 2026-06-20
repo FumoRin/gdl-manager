@@ -34,8 +34,7 @@ type DownloadManager struct {
 	Wg            sync.WaitGroup
 	Progress      chan Progress
 	Job           chan DownloadJob
-	State         map[string]*DownloadState
-	Mu            sync.Mutex
+	Repo          DownloadRepository
 	Cancellations map[string]context.CancelFunc
 	Ctx           context.Context
 	Cancel        context.CancelFunc
@@ -71,4 +70,23 @@ type Progress struct {
 
 func (s DownloadStatus) String() string {
 	return [...]string{"Queued", "Downloading", "Paused", "Completed", "Error"}[s]
+}
+
+type PartState struct {
+	ID          string
+	DownloadID  string
+	StartByte   int64
+	EndByte     int64
+	CurrentByte int64
+	WorkerID    string
+}
+
+type DownloadRepository interface {
+	SaveDownload(state *DownloadState) error
+	GetDownload(id string) (*DownloadState, error)
+	GetIncompleteDownload() ([]*DownloadState, error)
+	GetAllDownloads() ([]*DownloadState, error)
+	UpdatePartsProgress(partID string, currentByte int64) error
+	GetParts(downloadID string) ([]*PartState, error)
+	CreatePart(part *PartState) error
 }

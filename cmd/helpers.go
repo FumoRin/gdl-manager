@@ -5,14 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/fumorin/gdl-manager/internal/downloader"
 )
 
 func RunDownloadSession(m *downloader.DownloadManager) error {
 	progressDone := make(chan struct{})
-	stopAutosave := make(chan struct{})
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -50,37 +48,11 @@ func RunDownloadSession(m *downloader.DownloadManager) error {
 		sig := <-sigChan
 		fmt.Printf("\nReceived signal %v. Shutting down gracefully...\n", sig)
 		m.Cancel()
-		m.Mu.Lock()
-		for id, cancel := range m.Cancellations {
-			fmt.Printf("Cancelling download %s ...\n", id)
-			cancel()
-		}
-		m.Mu.Unlock()
-	}()
-
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if saveErr := m.SaveState("download.json"); saveErr != nil {
-					return
-				}
-			case <-stopAutosave:
-				return
-			}
-		}
 	}()
 
 	m.Wg.Wait()
 	close(m.Progress)
 	<-progressDone
-	close(stopAutosave)
-
-	if saveErr := m.SaveState("download.json"); saveErr != nil {
-		return saveErr
-	}
 
 	return nil
 }
