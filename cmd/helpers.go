@@ -18,7 +18,7 @@ func RunDownloadSession(m *downloader.DownloadManager) error {
 	go func() {
 		nextIndex := 0
 		lineMap := make(map[string]int)
-		for p := range m.Progress {
+		for p := range m.ProgressChan() {
 			if _, ok := lineMap[p.Filename]; !ok {
 				lineMap[p.Filename] = nextIndex
 				nextIndex++
@@ -47,11 +47,11 @@ func RunDownloadSession(m *downloader.DownloadManager) error {
 	go func() {
 		sig := <-sigChan
 		fmt.Printf("\nReceived signal %v. Shutting down gracefully...\n", sig)
-		m.Cancel()
+		m.Shutdown()
 	}()
 
-	m.Wg.Wait()
-	close(m.Progress)
+	m.Wait()
+
 	<-progressDone
 
 	return nil

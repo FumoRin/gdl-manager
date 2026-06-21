@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 )
 
+// Start a download worker for each job
 func (m *DownloadManager) StartWorker(count int) {
 	for range count {
 		go func() {
 			for {
-				job, ok := <-m.Job
+				job, ok := <-m.job
 				if !ok {
 					return
 				}
@@ -21,8 +21,9 @@ func (m *DownloadManager) StartWorker(count int) {
 	}
 }
 
+// Start a Download  
 func (m *DownloadManager) StartDownload(generatedID string, url string, filename string) {
-	state, err := m.Repo.GetDownload(generatedID)
+	state, err := m.repo.GetDownload(generatedID)
 	if err != nil || state == nil {
 		state = &DownloadState{
 			ID:        generatedID,
@@ -33,27 +34,33 @@ func (m *DownloadManager) StartDownload(generatedID string, url string, filename
 	}
 	state.Status = StateQueue
 
-	if err := m.Repo.SaveDownload(state); err != nil {
-		log.Printf("database error: %v\n", err)
+	if err := m.repo.SaveDownload(state); err != nil {
+		fmt.Printf("database error: %v\n", err)
 		return
 	}
 
+	m.wg.Add(1)
+
 	select {
-	case <-m.Ctx.Done():
+	case <-m.ctx.Done():
 		state.Status = StatePaused
-		if err := m.Repo.SaveDownload(state); err != nil {
-			log.Printf("database error: %v\n", err)
+		if err := m.repo.SaveDownload(state); err != nil {
+			fmt.Printf("database error: %v\n", err)
 		}
-		m.Wg.Done()
+		m.wg.Done()
 		return
 
-	case m.Job <- DownloadJob{ID: generatedID, URL: url, Filename: filename}:
+	case m.job <- DownloadJob{ID: generatedID, URL: url, Filename: filename}:
 		return
 	}
 }
 
 func (m *DownloadManager) StopDownload(id string) {
-	if cancel, ok := m.Cancellations[id]; ok {
+	m.cancellationsMu.Lock()
+	cancel, ok := m.cancellations[id]
+	m.cancellationsMu.Unlock()
+
+	if ok {
 		cancel()
 	}
 }
@@ -61,42 +68,44 @@ func (m *DownloadManager) StopDownload(id string) {
 func NewDownloadManager(repo DownloadRepository) *DownloadManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &DownloadManager{
-		Job:           make(chan DownloadJob),
-		Progress:      make(chan Progress),
-		Repo:          repo,
-		Cancellations: make(map[string]context.CancelFunc),
-		Ctx:           ctx,
-		Cancel:        cancel,
+		job:           make(chan DownloadJob, 1000),
+		progress:      make(chan Progress),
+		repo:          repo,
+		cancellations: make(map[string]context.CancelFunc),
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 }
 
 func (m *DownloadManager) processJob(job DownloadJob) {
-	defer m.Wg.Done()
-	if m.Ctx.Err() != nil {
-		state, err := m.Repo.GetDownload(job.ID)
+	defer m.wg.Done()
+	if m.ctx.Err() != nil {
+		state, err := m.repo.GetDownload(job.ID)
 		if err != nil {
 			return
 		}
 		state.Status = StatePaused
-		if err := m.Repo.SaveDownload(state); err != nil {
-			log.Printf("database error: %v\n", err)
+		if err := m.repo.SaveDownload(state); err != nil {
+			fmt.Printf("database error: %v\n", err)
 		}
 		return
 	}
 
 	// If it's downloading
-	ctx, cancel := context.WithCancel(m.Ctx)
-	m.Cancellations[job.ID] = cancel
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.cancellationsMu.Lock()
+	m.cancellations[job.ID] = cancel
+	m.cancellationsMu.Unlock()
 
 	opts := DownloadOptions{
 		URL:      job.URL,
 		Filename: job.Filename,
-		Progress: m.Progress,
+		Progress: m.progress,
 	}
 
-	totalSize, filename, downloadErr := Download(job.URL, opts, &m.Wg, ctx)
+	totalSize, filename, downloadErr := Download(job.URL, opts, ctx)
 
-	state, err := m.Repo.GetDownload(job.ID)
+	state, err := m.repo.GetDownload(job.ID)
 	if err != nil {
 		return
 	}
@@ -119,9 +128,14 @@ func (m *DownloadManager) processJob(job DownloadJob) {
 		fmt.Printf("Download Failed for %s: %v\n", job.URL, downloadErr)
 	}
 
-	if err := m.Repo.SaveDownload(state); err != nil {
+	if err := m.repo.SaveDownload(state); err != nil {
 		fmt.Printf("database error: %v\n", err)
 		return
 	}
+
+	m.cancellationsMu.Lock()
+	delete(m.cancellations, job.ID)
+	m.cancellationsMu.Unlock()
+
 	cancel()
 }

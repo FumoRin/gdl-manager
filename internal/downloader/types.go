@@ -31,13 +31,14 @@ type DownloadJob struct {
 }
 
 type DownloadManager struct {
-	Wg            sync.WaitGroup
-	Progress      chan Progress
-	Job           chan DownloadJob
-	Repo          DownloadRepository
-	Cancellations map[string]context.CancelFunc
-	Ctx           context.Context
-	Cancel        context.CancelFunc
+	wg              sync.WaitGroup
+	progress        chan Progress
+	job             chan DownloadJob
+	repo            DownloadRepository
+	cancellationsMu sync.Mutex
+	cancellations   map[string]context.CancelFunc
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
 type DownloadState struct {
@@ -52,6 +53,7 @@ type ProgressWriter struct {
 	Filename     string
 	Total        int64
 	Current      int64
+	ByteAtStart  int64
 	Destination  io.Writer
 	ProgressChan chan Progress
 

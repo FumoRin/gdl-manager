@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/fumorin/gdl-manager/internal/downloader"
 	"github.com/spf13/cobra"
@@ -18,12 +17,12 @@ var resumeCmd = &cobra.Command{
 			// If args provided
 			targetID := args[0]
 
-			state, err := m.Repo.GetDownload(targetID)
+			state, err := m.GetDownload(targetID)
 			if err != nil {
-				log.Fatalf("Failed to query download: %v\n", err)
+				return fmt.Errorf("failed to query download: %v", err)
 			}
 			if state == nil {
-				log.Fatalf("Download with provided ID not found: %s\n", targetID)
+				return fmt.Errorf("download with provided ID not found: %s", targetID)
 			}
 
 			if state.Status != downloader.StateCompleted {
@@ -34,9 +33,9 @@ var resumeCmd = &cobra.Command{
 			}
 		} else {
 			// If no Args provided
-			states, err := m.Repo.GetIncompleteDownload()
+			states, err := m.GetIncompleteDownload()
 			if err != nil {
-				log.Fatalf("Failed to query incomplete downloads: %v\n", err)
+				return fmt.Errorf("failed to query incomplete downloads: %v", err)
 			}
 
 			if len(states) == 0 {
@@ -49,7 +48,7 @@ var resumeCmd = &cobra.Command{
 			}
 		}
 
-		close(m.Job)
+		m.Close()
 		return RunDownloadSession(m)
 	},
 }

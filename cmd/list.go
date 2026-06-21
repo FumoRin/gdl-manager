@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -12,9 +11,9 @@ var listCmd = &cobra.Command{
 	Short: "List all of the download job",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m := app.Manager
-		states, err := m.Repo.GetAllDownloads()
+		states, err := m.GetAllDownload()
 		if err != nil {
-			log.Fatalln("Failed to retrieve downloads:", err)
+			return fmt.Errorf("failed to retrieve downloads: %v", err)
 		}
 
 		fmt.Printf("%-64s | %-30s | %s\n", "ID", "Filename", "Status")

@@ -3,7 +3,6 @@ package cmd
 import (
 	"crypto/sha256"
 	"fmt"
-	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -18,20 +17,16 @@ var downloadCmd = &cobra.Command{
 		m := app.Manager
 
 		if filename != "" && len(args) > 1 {
-			log.Fatal("Error: Flag output is only available for single download")
+			return fmt.Errorf("error: Flag output is only available for single download")
 		}
-		
-		m.Wg.Add(len(args))
 
-		go func ()  {
-			for _, url := range args {
-				hash := sha256.Sum256([]byte(url))
-				ID := fmt.Sprintf("%x", hash)
-				m.StartDownload(ID, url, filename)
-			}
-			close(m.Job)	
-		}()
-		
+		for _, url := range args {
+			hash := sha256.Sum256([]byte(url))
+			ID := fmt.Sprintf("%x", hash)
+			m.StartDownload(ID, url, filename)
+		}
+		m.Close()
+
 		return RunDownloadSession(m)
 	},
 }
