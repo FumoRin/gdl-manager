@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 )
 
-func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.Context) (totalSize int64, filename string, err error) {
+func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize int64, filename string, err error) {
 	var currentSize int64
 	var file *os.File
 	var errFile error
@@ -76,7 +74,7 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 		}
 
 	default:
-		log.Fatalf("Unexpected status code: %d\n", bodyResp.StatusCode)
+		return 0, "", fmt.Errorf("unexpected status code from server: %d", bodyResp.StatusCode)
 	}
 
 	defer func() {
@@ -91,31 +89,46 @@ func Download(url string, opts DownloadOptions, wg *sync.WaitGroup, ctx context.
 		Filename:     filename,
 		Total:        totalSize,
 		Current:      currentSize,
+		ByteAtStart:  currentSize,
 		Destination:  file,
 		StartTime:    time.Now(),
 		ProgressChan: opts.Progress,
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			err = ctx.Err()
+	copyChan := make(chan error, 1)
+	go func() {
+		_, copyErr := io.CopyBuffer(pw, bodyResp.Body, buf)
+		copyChan <- copyErr
+	}()
+
+	select {
+	case <-ctx.Done():
+		if bodyErr := bodyResp.Body.Close(); bodyErr != nil {
+			fmt.Printf("error closing response body: %v", bodyErr)
 			return
-		default:
-			n, writeErr := bodyResp.Body.Read(buf)
-
-			if writeErr == io.EOF {
-				return
-			} else if writeErr != nil {
-				err = writeErr
-				return
-			}
-
-			_, dataErr := pw.Write(buf[:n])
-			if dataErr != nil {
-				err = dataErr
-				return
-			}
+		} 
+		err = ctx.Err()
+		return
+	case copyErr := <-copyChan:
+		if copyErr != nil {
+			err = copyErr
+			return
 		}
 	}
+
+	finalUpdate := Progress{
+		Filename:    filename,
+		CurrentSize: totalSize,
+		TotalSize:   totalSize,
+		Speed:       0,
+		Percentage:  100.0,
+		ETA:         0,
+	}
+	select {
+	case opts.Progress <- finalUpdate:
+	default:
+
+	}
+
+	return totalSize, filename, nil
 }

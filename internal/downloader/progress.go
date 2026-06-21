@@ -26,7 +26,10 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 			ETA: pw.Eta(),
 		}
 
-		pw.ProgressChan <- update
+		select {
+		case pw.ProgressChan <- update:
+		default:
+		}
 	}
 
 	return n, err
@@ -39,7 +42,7 @@ func (pw *ProgressWriter) Speed() float64 {
 		return 0
 	}
 
-	return float64(pw.Current) / elapsed
+	return float64(pw.Current - pw.ByteAtStart) / elapsed
 }
 
 func (pw *ProgressWriter) Eta() time.Duration {
