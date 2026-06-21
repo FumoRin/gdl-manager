@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/fumorin/gdl-manager/internal/downloader"
 	"github.com/spf13/cobra"
@@ -18,7 +20,16 @@ var rootCmd = &cobra.Command{
 	Short: "Download file from the internet",
 	Long:  "A CLI Tool for downloading file from the internet",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		repo, err := downloader.NewSQLiteRepository("gdl.db")
+		dir, err := os.UserConfigDir()
+		var dbPath string
+		if err == nil {
+			gdlDir := filepath.Join(dir, "gdl")
+			_ = os.MkdirAll(gdlDir, 0755)
+			dbPath = filepath.Join(gdlDir, "gdl.db")
+		} else {
+			dbPath = "gdl.db"
+		}
+		repo, err := downloader.NewSQLiteRepository(dbPath)
 		if err != nil {
 			return fmt.Errorf("failed to initialized downloader database: %w", err)
 		}

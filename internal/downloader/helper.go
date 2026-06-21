@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -51,23 +52,26 @@ func FormatTime(d time.Duration) string {
 }
 
 func Truncate(s string, max int) string {
-    if len(s) > max {
-        return s[:max-3] + "..."
-    }
-    return s
+	if len(s) > max {
+		return s[:max-3] + "..."
+	}
+	return s
 }
 
 func resolveFilename(url string, opts DownloadOptions, resp *http.Response) string {
+	var filename string
 	if opts.Filename != "" {
-		return opts.Filename
-	}
-
-	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		filename = opts.Filename
+	} else if cd := resp.Header.Get("Content-Disposition"); cd != "" {
 		_, params, err := mime.ParseMediaType(cd)
 		if err == nil && params["filename"] != "" {
 			return params["filename"]
 		}
 	}
 
-	return path.Base(url)
+	if filename == "" {
+		filename = path.Base(url)
+	}
+
+	return filepath.Base(filename)
 }
