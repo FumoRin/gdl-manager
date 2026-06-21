@@ -15,10 +15,16 @@ func NewSQLiteRepository(dbPath string) (*SQLiteRepository, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	conn.SetMaxOpenConns(1)
+
 	if err := conn.Ping(); err != nil {
 		return nil, err
 	}
 
+	if _, err := conn.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		return nil, err
+	}
 	metadataQuery := `
 	CREATE TABLE IF NOT EXISTS download_metadata (
 		id TEXT PRIMARY KEY,
@@ -71,7 +77,7 @@ func (r *SQLiteRepository) GetDownload(id string) (*DownloadState, error) {
 	state := &DownloadState{}
 	var status int
 
-	err := r.db.QueryRow("SELECT id, url, filename, total_size, status FROM download_metadata WHERE id = ?").Scan(&state.ID, &state.URL, &state.Filename, &state.TotalSize, &status)
+	err := r.db.QueryRow("SELECT id, url, filename, total_size, status FROM download_metadata WHERE id = ?", id).Scan(&state.ID, &state.URL, &state.Filename, &state.TotalSize, &status)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -84,6 +90,7 @@ func (r *SQLiteRepository) GetDownload(id string) (*DownloadState, error) {
 }
 
 func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
+	var status int
 	rows, err := r.db.Query("SELECT id, url, filename, total_size, status FROM download_metadata WHERE status != ?", StateCompleted)
 	if err != nil {
 		return nil, err
@@ -102,11 +109,12 @@ func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
 			&currentState.URL,
 			&currentState.Filename,
 			&currentState.TotalSize,
-			&currentState.Status,
+			&status,
 		); err != nil {
 			return nil, err
 		}
 
+		currentState.Status = DownloadStatus(status)
 		state = append(state, currentState)
 	}
 
@@ -117,6 +125,7 @@ func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
 }
 
 func (r *SQLiteRepository) GetAllDownloads() ([]*DownloadState, error) {
+	var status int
 	rows, err := r.db.Query("SELECT id, url, filename, total_size, status FROM download_metadata")
 	if err != nil {
 		return nil, err
@@ -135,11 +144,12 @@ func (r *SQLiteRepository) GetAllDownloads() ([]*DownloadState, error) {
 			&currentState.URL,
 			&currentState.Filename,
 			&currentState.TotalSize,
-			&currentState.Status,
+			&status,
 		); err != nil {
 			return nil, err
 		}
 
+		currentState.Status = DownloadStatus(status)
 		state = append(state, currentState)
 	}
 
@@ -176,7 +186,7 @@ func (r *SQLiteRepository) UpdatePartsProgress(partID string, currentByte int64)
 }
 
 func (r *SQLiteRepository) GetParts(downloadID string) ([]*PartState, error) {
-	rows, err := r.db.Query("SELECT id, download_id, start_byte, end_byte, current_byte, workers_id FROM download_part_progress WHERE download_id = ?")
+	rows, err := r.db.Query("SELECT id, download_id, start_byte, end_byte, current_byte, workers_id FROM download_part_progress WHERE download_id = ?", downloadID)
 	if err != nil {
 		return nil, err
 	}
