@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -74,4 +75,22 @@ func resolveFilename(url string, opts DownloadOptions, resp *http.Response) stri
 	}
 
 	return filepath.Base(filename)
+}
+
+func GetUniqueFilename(filename string) string {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return filename
+	}
+
+	ext := filepath.Ext(filename)
+	name := strings.TrimSuffix(filename, ext)
+	counter := 1
+
+	for {
+		newFilename := fmt.Sprintf("%s(%d)%s", name, counter, ext)
+		if _, err := os.Stat(newFilename); os.IsNotExist(err) {
+			return newFilename
+		}
+		counter++
+	}
 }

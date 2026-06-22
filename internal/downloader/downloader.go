@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize int64, filename string, err error) {
+func Download(id string, url string, opts DownloadOptions, ctx context.Context) (totalSize int64, filename string, err error) {
 	var currentSize int64
 	var file *os.File
 	var errFile error
@@ -25,7 +25,9 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 		return
 	}
 	filename = resolveFilename(url, opts, headResp)
-	if info, err := os.Stat(filename); err == nil {
+	tmpFilename := filename + "." + id + ".tmp"
+
+	if info, err := os.Stat(tmpFilename); err == nil {
 		currentSize = info.Size()
 	}
 
@@ -65,7 +67,7 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 			totalSize = 0 // Unknown
 		}
 
-		file, errFile = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+		file, errFile = os.OpenFile(tmpFilename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		if errFile != nil {
 			err = errFile
 			return
@@ -78,7 +80,7 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 			totalSize = 0 // Unknown
 		}
 
-		file, errFile = os.Create(filename)
+		file, errFile = os.Create(tmpFilename)
 		if errFile != nil {
 			err = errFile
 			return
@@ -126,6 +128,13 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 			return
 		}
 	}
+
+	// Finalize the file
+	finalFilename := GetUniqueFilename(filename)
+	if err := os.Rename(tmpFilename, finalFilename); err != nil {
+		return totalSize, filename, fmt.Errorf("failed to rename temp file to final: %v", err)
+	}
+	filename = finalFilename
 
 	finalUpdate := Progress{
 		Filename:    filename,
