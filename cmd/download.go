@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"crypto/sha256"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +21,7 @@ var downloadCmd = &cobra.Command{
 		}
 
 		for _, url := range args {
-			hash := sha256.Sum256([]byte(url))
-			ID := fmt.Sprintf("%x", hash)
+			ID := uuid.NewString()
 			m.StartDownload(ID, url, filename)
 		}
 		m.Close()

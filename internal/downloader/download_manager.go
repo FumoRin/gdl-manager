@@ -103,7 +103,7 @@ func (m *DownloadManager) processJob(job DownloadJob) {
 		Progress: m.progress,
 	}
 
-	totalSize, filename, downloadErr := Download(job.URL, opts, ctx)
+	totalSize, filename, downloadErr := Download(job.ID, job.URL, opts, ctx)
 
 	state, err := m.repo.GetDownload(job.ID)
 	if err != nil {
