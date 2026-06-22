@@ -56,9 +56,15 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 		}
 	}()
 
+
 	switch bodyResp.StatusCode {
 	case http.StatusPartialContent:
-		totalSize = currentSize + bodyResp.ContentLength
+		if bodyResp.ContentLength >= 0 {
+			totalSize = currentSize + bodyResp.ContentLength
+		} else {
+			totalSize = 0 // Unknown
+		}
+
 		file, errFile = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		if errFile != nil {
 			err = errFile
@@ -66,7 +72,12 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 		}
 
 	case http.StatusOK:
-		totalSize = bodyResp.ContentLength
+		if bodyResp.ContentLength >= 0 {
+			totalSize =  bodyResp.ContentLength
+		} else {
+			totalSize = 0 // Unknown
+		}
+
 		file, errFile = os.Create(filename)
 		if errFile != nil {
 			err = errFile
@@ -106,7 +117,7 @@ func Download(url string, opts DownloadOptions, ctx context.Context) (totalSize 
 		if bodyErr := bodyResp.Body.Close(); bodyErr != nil {
 			fmt.Printf("error closing response body: %v", bodyErr)
 			return
-		} 
+		}
 		err = ctx.Err()
 		return
 	case copyErr := <-copyChan:
