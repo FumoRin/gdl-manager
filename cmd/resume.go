@@ -25,7 +25,9 @@ var resumeCmd = &cobra.Command{
 				return fmt.Errorf("download with provided ID not found: %s", targetID)
 			}
 
-			if state.Status != downloader.StateCompleted {
+			if state.Status != downloader.StateCompleted &&
+			state.Status != downloader.StateDownloading &&
+			state.Status != downloader.StateQueue {
 				fmt.Printf("Resuming specific download: %s\n", state.Filename)
 				m.StartDownload(targetID, state.URL, state.Filename)
 			} else {
