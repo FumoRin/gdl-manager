@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -71,7 +72,11 @@ type Progress struct {
 }
 
 func (s DownloadStatus) String() string {
-	return [...]string{"Queued", "Downloading", "Paused", "Completed", "Error"}[s]
+	names := [...]string{"Queued", "Downloading", "Paused", "Completed", "Error"}
+	if int(s) < 0 || int(s) >= len(names) {
+		return fmt.Sprintf("Undefined(%d)", s)
+	}
+	return names[s]
 }
 
 type PartState struct {
