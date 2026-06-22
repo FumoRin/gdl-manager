@@ -89,8 +89,21 @@ func (r *SQLiteRepository) GetDownload(id string) (*DownloadState, error) {
 	return state, nil
 }
 
+func scanDownloadRows(rows *sql.Rows) ([]*DownloadState, error) {
+    var states []*DownloadState
+    for rows.Next() {
+        s := &DownloadState{}
+        var status int
+        if err := rows.Scan(&s.ID, &s.URL, &s.Filename, &s.TotalSize, &status); err != nil {
+            return nil, err
+        }
+        s.Status = DownloadStatus(status)
+        states = append(states, s)
+    }
+    return states, rows.Err()
+}
+
 func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
-	var status int
 	rows, err := r.db.Query("SELECT id, url, filename, total_size, status FROM download_metadata WHERE status != ?", StateCompleted)
 	if err != nil {
 		return nil, err
@@ -100,32 +113,10 @@ func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
 		_ = rows.Close()
 	}()
 
-	var state []*DownloadState
-	for rows.Next() {
-		currentState := &DownloadState{}
-
-		if err := rows.Scan(
-			&currentState.ID,
-			&currentState.URL,
-			&currentState.Filename,
-			&currentState.TotalSize,
-			&status,
-		); err != nil {
-			return nil, err
-		}
-
-		currentState.Status = DownloadStatus(status)
-		state = append(state, currentState)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return state, nil
+	return scanDownloadRows(rows)
 }
 
 func (r *SQLiteRepository) GetAllDownloads() ([]*DownloadState, error) {
-	var status int
 	rows, err := r.db.Query("SELECT id, url, filename, total_size, status FROM download_metadata")
 	if err != nil {
 		return nil, err
@@ -135,28 +126,7 @@ func (r *SQLiteRepository) GetAllDownloads() ([]*DownloadState, error) {
 		_ = rows.Close()
 	}()
 
-	var state []*DownloadState
-	for rows.Next() {
-		currentState := &DownloadState{}
-
-		if err := rows.Scan(
-			&currentState.ID,
-			&currentState.URL,
-			&currentState.Filename,
-			&currentState.TotalSize,
-			&status,
-		); err != nil {
-			return nil, err
-		}
-
-		currentState.Status = DownloadStatus(status)
-		state = append(state, currentState)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return state, nil
+	return scanDownloadRows(rows)
 }
 
 func (r *SQLiteRepository) CreatePart(part *PartState) error {
