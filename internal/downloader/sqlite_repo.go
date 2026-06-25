@@ -90,17 +90,17 @@ func (r *SQLiteRepository) GetDownload(id string) (*DownloadState, error) {
 }
 
 func scanDownloadRows(rows *sql.Rows) ([]*DownloadState, error) {
-    var states []*DownloadState
-    for rows.Next() {
-        s := &DownloadState{}
-        var status int
-        if err := rows.Scan(&s.ID, &s.URL, &s.Filename, &s.TotalSize, &status); err != nil {
-            return nil, err
-        }
-        s.Status = DownloadStatus(status)
-        states = append(states, s)
-    }
-    return states, rows.Err()
+	var states []*DownloadState
+	for rows.Next() {
+		s := &DownloadState{}
+		var status int
+		if err := rows.Scan(&s.ID, &s.URL, &s.Filename, &s.TotalSize, &status); err != nil {
+			return nil, err
+		}
+		s.Status = DownloadStatus(status)
+		states = append(states, s)
+	}
+	return states, rows.Err()
 }
 
 func (r *SQLiteRepository) GetIncompleteDownload() ([]*DownloadState, error) {
@@ -127,6 +127,24 @@ func (r *SQLiteRepository) GetAllDownloads() ([]*DownloadState, error) {
 	}()
 
 	return scanDownloadRows(rows)
+}
+
+func (r *SQLiteRepository) DeleteDownload(id string) error {
+	query := `DELETE FROM download_metadata WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *SQLiteRepository) UpdateFilename(id string, newFilename string) error {
+	query := `UPDATE download_metadata SET filename = ? WHERE id = ?`
+	_, err := r.db.Exec(query, newFilename, id)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *SQLiteRepository) CreatePart(part *PartState) error {

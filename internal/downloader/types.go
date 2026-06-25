@@ -93,7 +93,9 @@ type DownloadRepository interface {
 	GetDownload(id string) (*DownloadState, error)
 	GetIncompleteDownload() ([]*DownloadState, error)
 	GetAllDownloads() ([]*DownloadState, error)
+	DeleteDownload(id string) error
 	UpdatePartsProgress(partID string, currentByte int64) error
 	GetParts(downloadID string) ([]*PartState, error)
 	CreatePart(part *PartState) error
+	UpdateFilename(id string, newFilename string) error
 }

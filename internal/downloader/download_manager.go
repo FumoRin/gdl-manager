@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 )
 
 // Start a download worker for each job
@@ -63,6 +64,72 @@ func (m *DownloadManager) StopDownload(id string) {
 	if ok {
 		cancel()
 	}
+}
+
+func (m *DownloadManager) RenameDownload(id string, newFilename string) error {
+	state, err := m.repo.GetDownload(id)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		return fmt.Errorf("download not found")
+	}
+
+	m.StopDownload(id)
+
+	// Handle physical file rename
+	oldTmp := state.Filename + "." + id + ".tmp"
+	newTmp := newFilename + "." + id + ".tmp"
+
+	if _, err := os.Stat(oldTmp); err == nil {
+		if err := os.Rename(oldTmp, newTmp); err != nil {
+			return fmt.Errorf("failed to rename temp file: %w", err)
+		}
+	}
+
+	// If it's completed, we should also rename the final file.
+	// Since we don't store the exact final filename (GetUniqueFilename adds suffixes),
+	// this part is tricky. But we can try to rename state.Filename if it exists.
+	if state.Status == StateCompleted {
+		if _, err := os.Stat(state.Filename); err == nil {
+			if err := os.Rename(state.Filename, newFilename); err != nil {
+				// We ignore this error because GetUniqueFilename might have renamed it to something else
+				fmt.Printf("warning: could not rename final file %s: %v\n", state.Filename, err)
+			}
+		}
+	}
+
+	if err := m.repo.UpdateFilename(id, newFilename); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *DownloadManager) DeleteDownload(id string, deleteFiles bool) error {
+	state, err := m.repo.GetDownload(id)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		return fmt.Errorf("download not found")
+	}
+
+	m.StopDownload(id)
+
+	if deleteFiles {
+		// Delete temp file
+		tmpFile := state.Filename + "." + id + ".tmp"
+		_ = os.Remove(tmpFile)
+		// Delete final file
+		_ = os.Remove(state.Filename)
+	}
+
+	if err := m.repo.DeleteDownload(id); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func NewDownloadManager(repo DownloadRepository) *DownloadManager {
