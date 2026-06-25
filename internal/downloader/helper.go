@@ -32,24 +32,7 @@ func FormatTime(d time.Duration) string {
 	minute := remain / 60
 	second := remain % 60
 
-	parts := []string{}
-
-	if hour > 0 {
-		hstr := fmt.Sprintf("%d Hours", hour)
-		parts = append(parts, hstr)
-	}
-
-	if minute > 0 {
-		mstr := fmt.Sprintf("%d Minutes", minute)
-		parts = append(parts, mstr)
-	}
-
-	sstr := fmt.Sprintf("%d Seconds", second)
-	parts = append(parts, sstr)
-
-	result := strings.Join(parts, " ")
-
-	return result
+	return fmt.Sprintf("%02d:%02d:%02d", hour, minute, second)
 }
 
 func Truncate(s string, max int) string {
